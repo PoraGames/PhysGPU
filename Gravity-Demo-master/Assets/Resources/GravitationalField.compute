@@ -1,0 +1,56 @@
+﻿
+#include "GravitationalField.cginc"
+
+RWStructuredBuffer<FieldPoint> point_buffer;
+RWStructuredBuffer<uint3>      grid_buffer;
+RWStructuredBuffer<Body>       body_buffer;
+
+#pragma kernel ComputePointPositions
+
+float3 offset;
+
+[numthreads(1, 1, 1)]
+void ComputePointPositions(uint3 id : SV_DispatchThreadID)
+{
+    FieldPoint field_point =
+    {
+        float3(id.x, id.y, id.z) - offset,
+        (float3)0,
+    };
+
+    point_buffer[Index(id)] = field_point;
+}
+
+#pragma kernel ComputeDisplacement
+
+uint body_count;
+
+[numthreads(1, 1, 1)]
+void ComputeDisplacement(uint3 id : SV_DispatchThreadID)
+{
+    uint   index        = Index(id);
+    float3 displacement = (float3)0;
+    for (uint i = 0; i < body_count; ++i)
+    {
+        displacement +=
+        GravitationalDisplacement(body_buffer[i], point_buffer[index]);
+    }
+
+    point_buffer[index].displacement = displacement;
+}
+
+#pragma kernel ComputeGrid
+
+[numthreads(1, 1, 1)]
+void ComputeGrid(uint3 id : SV_DispatchThreadID)
+{
+    int index = Index(id);
+
+    grid_buffer[index].x = index;
+    grid_buffer[index].y = index;
+    grid_buffer[index].z = index;
+
+    if (id.x < w - 1) grid_buffer[index].x = Index(id.x + 1, id.y,     id.z    );
+    if (id.y < h - 1) grid_buffer[index].y = Index(id.x,     id.y + 1, id.z    );
+    if (id.z < d - 1) grid_buffer[index].z = Index(id.x,     id.y,     id.z + 1);
+}
